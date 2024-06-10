@@ -34,6 +34,11 @@ let s:postgres_list_schema_query = "
     \   and pg_catalog.has_schema_privilege(current_user, nspname, 'USAGE')
     \ order by nspname"
 
+let postgres_only_tables = "
+	\ SELECT table_schema, table_name FROM information_schema.tables ;"
+let postgres_only_views = "
+	\ select schemaname, matviewname from pg_matviews;"
+
 if empty(g:db_ui_use_postgres_views)
   let postgres_tables_and_views = "
         \ SELECT table_schema, table_name FROM information_schema.tables ;"
@@ -44,11 +49,19 @@ else
 endif
 let s:postgres_tables_and_views = postgres_tables_and_views
 
+let s:postgres_procedures = "
+		\ select routine_schema, routine_name from information_schema.routines where routine_type='PROCEDURE';"
+
+let s:postgres_functions = "
+		\ select routine_schema, routine_name from information_schema.routines where routine_type='FUNCTION';"
+
 let s:postgresql = {
       \ 'args': ['-A', '-c'],
       \ 'foreign_key_query': s:postgres_foreign_key_query,
       \ 'schemes_query': s:postgres_list_schema_query,
       \ 'schemes_tables_query': s:postgres_tables_and_views,
+      \ 'schemes_procedures_query': s:postgres_procedures,
+      \ 'schemes_functions_query': s:postgres_functions,
       \ 'select_foreign_key_query': 'select * from "%s"."%s" where "%s" = %s',
       \ 'cell_line_number': 2,
       \ 'cell_line_pattern': '^-\++-\+',
@@ -90,6 +103,13 @@ let s:mysql_foreign_key_query =  "
       \ SELECT referenced_table_name, referenced_column_name, referenced_table_schema
       \ from information_schema.key_column_usage
       \ where referenced_table_name is not null and column_name = '{col_name}' LIMIT 1"
+
+let mysql_only_tables = "
+      \ SELECT table_schema, table_name FROM information_schema.tables where table_type != 'VIEW'"
+
+let mysql_only_views = "
+      \ SELECT table_schema, table_name FROM information_schema.tables where table_type = 'VIEW'"
+
 let s:mysql = {
       \ 'foreign_key_query': s:mysql_foreign_key_query,
       \ 'schemes_query': 'SELECT schema_name FROM information_schema.schemata',

@@ -441,20 +441,44 @@ function! s:drawer.add_db(db) abort
   endif
 
   if a:db.schema_support
+
     call self.add('Schemas ('.len(a:db.schemas.items).')', 'toggle', 'schemas', self.get_toggle_icon('schemas', a:db.schemas), a:db.key_name, 1, { 'expanded': a:db.schemas.expanded })
+
     if a:db.schemas.expanded
+
       for schema in a:db.schemas.list
         let schema_item = a:db.schemas.items[schema]
-        let tables = schema_item.tables
-        call self.add(schema.' ('.len(tables.items).')', 'toggle', 'schemas->items->'.schema, self.get_toggle_icon('schema', schema_item), a:db.key_name, 2, { 'expanded': schema_item.expanded })
+        call self.add(schema, 'toggle', 'schemas->items->'.schema, self.get_toggle_icon('schema', schema_item), a:db.key_name, 2, { 'expanded': schema_item.expanded })
+
         if schema_item.expanded
-          call self.render_tables(tables, a:db,'schemas->items->'.schema.'->tables->items', 3, schema)
+
+          let schema_subitem = a:db.schemas.items[schema].tables
+          call self.add('Tables and Views ('.len(schema_subitem.items).')', 'toggle', 'schemas->items->'.schema.'->tables', self.get_toggle_icon('tables', schema_subitem), a:db.key_name, 3, { 'expanded': schema_subitem.expanded })
+          if schema_subitem.expanded
+            call self.render_tables(schema_subitem, a:db,'schemas->items->'.schema.'->tables->items', 4, schema)
+          endif
+
+          let schema_subitem = a:db.schemas.items[schema].procedures
+          call self.add('Procedures ('.len(schema_subitem.items).')', 'toggle', 'schemas->items->'.schema.'->procedures', self.get_toggle_icon('tables', schema_subitem), a:db.key_name, 3, { 'expanded': schema_subitem.expanded })
+          if schema_subitem.expanded
+            call self.render_procedures(schema_subitem, a:db,'schemas->items->'.schema.'->procedures->items', 4, schema)
+          endif
+
+          let schema_subitem = a:db.schemas.items[schema].functions
+          call self.add('Functions ('.len(schema_subitem.items).')', 'toggle', 'schemas->items->'.schema.'->functions', self.get_toggle_icon('tables', schema_subitem), a:db.key_name, 3, { 'expanded': schema_subitem.expanded })
+          if schema_subitem.expanded
+            call self.render_functions(schema_subitem, a:db,'schemas->items->'.schema.'->functions->items', 4, schema)
+          endif
         endif
-      endfor
-    endif
+			endfor
+		endif
   else
-    call self.add('Tables ('.len(a:db.tables.items).')', 'toggle', 'tables', self.get_toggle_icon('tables', a:db.tables), a:db.key_name, 1, { 'expanded': a:db.tables.expanded })
+    call self.add('Tables and Views ('.len(a:db.tables.items).')', 'toggle', 'tables', self.get_toggle_icon('tables', a:db.tables), a:db.key_name, 1, { 'expanded': a:db.tables.expanded })
     call self.render_tables(a:db.tables, a:db, 'tables->items', 2, '')
+    call self.add('Procedures ('.len(a:db.procedures.items).')', 'toggle', 'procedures', self.get_toggle_icon('procedures', a:db.procedures), a:db.key_name, 1, { 'expanded': a:db.procedures.expanded })
+    call self.render_procedures(a:db.procedures, a:db, 'procedures->items', 2, '')
+    call self.add('Functions ('.len(a:db.functions.items).')', 'toggle', 'functions', self.get_toggle_icon('functions', a:db.functions), a:db.key_name, 1, { 'expanded': a:db.functions.expanded })
+    call self.render_functions(a:db.functions, a:db, 'functions->items', 2, '')
   endif
 endfunction
 
@@ -467,6 +491,34 @@ function! s:drawer.render_tables(tables, db, path, level, schema) abort
     if a:tables.items[table].expanded
       for [helper_name, helper] in items(a:db.table_helpers)
         call self.add(helper_name, 'open', 'table', g:db_ui_icons.tables, a:db.key_name, a:level + 1, {'table': table, 'content': helper, 'schema': a:schema })
+      endfor
+    endif
+  endfor
+endfunction
+
+function! s:drawer.render_procedures(procedures, db, path, level, schema) abort
+  if !a:procedures.expanded
+    return
+  endif
+  for procedure in a:procedures.list
+    call self.add(procedure, 'toggle', a:path.'->'.procedure, self.get_toggle_icon('procedure', a:procedures.items[procedure]), a:db.key_name, a:level, { 'expanded': a:procedures.items[procedure].expanded })
+    if a:procedures.items[procedure].expanded
+      for [helper_name, helper] in items(a:db.procedure_helpers)
+        call self.add(helper_name, 'open', 'procedure', g:db_ui_icons.procedures, a:db.key_name, a:level + 1, {'procedure': procedure, 'content': helper, 'schema': a:schema })
+      endfor
+    endif
+  endfor
+endfunction
+
+function! s:drawer.render_functions(functions, db, path, level, schema) abort
+  if !a:functions.expanded
+    return
+  endif
+  for function in a:functions.list
+    call self.add(function, 'toggle', a:path.'->'.function, self.get_toggle_icon('function', a:functions.items[function]), a:db.key_name, a:level, { 'expanded': a:functions.items[function].expanded })
+    if a:functions.items[function].expanded
+      for [helper_name, helper] in items(a:db.function_helpers)
+        call self.add(helper_name, 'open', 'function', g:db_ui_icons.functions, a:db.key_name, a:level + 1, {'function': function, 'content': helper, 'schema': a:schema })
       endfor
     endif
   endfor
@@ -602,6 +654,8 @@ endfunction
 
 function! s:drawer.populate_tables(db) abort
   let a:db.tables.list = []
+  let a:db.procedures.list = []
+  let a:db.functions.list = []
   if empty(a:db.conn)
     return a:db
   endif
@@ -625,6 +679,15 @@ function! s:drawer.populate_tables(db) abort
   endif
 
   call self.populate_table_items(a:db.tables)
+
+  let procedures = db#adapter#call(a:db.conn, 'procedures', [a:db.conn], [])
+  let a:db.procedures.list = procedures
+  call self.populate_procedure_items(a:db.procedures)
+
+  let functions = db#adapter#call(a:db.conn, 'functions', [a:db.conn], [])
+  let a:db.functions.list = functions
+  call self.populate_function_items(a:db.functions)
+
   return a:db
 endfunction
 
@@ -632,6 +695,22 @@ function! s:drawer.populate_table_items(tables) abort
   for table in a:tables.list
     if !has_key(a:tables.items, table)
       let a:tables.items[table] = {'expanded': 0 }
+    endif
+  endfor
+endfunction
+
+function! s:drawer.populate_procedure_items(procedures) abort
+  for procedure in a:procedures.list
+    if !has_key(a:procedures.items, procedure)
+      let a:procedures.items[procedure] = {'expanded': 0 }
+    endif
+  endfor
+endfunction
+
+function! s:drawer.populate_function_items(functions) abort
+  for function in a:functions.list
+    if !has_key(a:functions.items, function)
+      let a:functions.items[function] = {'expanded': 0 }
     endif
   endfor
 endfunction
@@ -644,6 +723,8 @@ function! s:drawer.populate_schemas(db) abort
   let scheme = db_ui#schemas#get(a:db.scheme)
   let schemas = scheme.parse_results(db_ui#schemas#query(a:db, scheme, scheme.schemes_query), 1)
   let tables = scheme.parse_results(db_ui#schemas#query(a:db, scheme, scheme.schemes_tables_query), 2)
+  let procedures = scheme.parse_results(db_ui#schemas#query(a:db, scheme, scheme.schemes_procedures_query), 2)
+  let functions = scheme.parse_results(db_ui#schemas#query(a:db, scheme, scheme.schemes_functions_query), 2)
   let schemas = filter(schemas, {i, v -> !self._is_schema_ignored(v)})
   let tables_by_schema = {}
   for [scheme_name, table] in tables
@@ -656,21 +737,58 @@ function! s:drawer.populate_schemas(db) abort
     call add(tables_by_schema[scheme_name], table)
     call add(a:db.tables.list, table)
   endfor
+  let procedures_by_schema = {}
+  for [scheme_name, procedure] in procedures
+    if self._is_schema_ignored(scheme_name)
+      continue
+    endif
+    if !has_key(procedures_by_schema, scheme_name)
+      let procedures_by_schema[scheme_name] = []
+    endif
+    call add(procedures_by_schema[scheme_name], procedure)
+    call add(a:db.procedures.list, procedure)
+  endfor
+  let functions_by_schema = {}
+  for [scheme_name, function] in functions
+    if self._is_schema_ignored(scheme_name)
+      continue
+    endif
+    if !has_key(functions_by_schema, scheme_name)
+      let functions_by_schema[scheme_name] = []
+    endif
+    call add(functions_by_schema[scheme_name], function)
+    call add(a:db.functions.list, function)
+  endfor
   let a:db.schemas.list = schemas
   for schema in schemas
     if !has_key(a:db.schemas.items, schema)
       let a:db.schemas.items[schema] = {
             \ 'expanded': 0,
+            \ 'list': [],
+			\ 'items': {},
             \ 'tables': {
-            \   'expanded': 1,
+            \   'expanded': 0,
+            \   'list': [],
+            \   'items': {},
+            \ },
+            \ 'procedures': {
+            \   'expanded': 0,
+            \   'list': [],
+            \   'items': {},
+            \ },
+            \ 'functions': {
+            \   'expanded': 0,
             \   'list': [],
             \   'items': {},
             \ },
             \ }
-
     endif
     let a:db.schemas.items[schema].tables.list = sort(get(tables_by_schema, schema, []))
+    let a:db.schemas.items[schema].procedures.list = sort(get(procedures_by_schema, schema, []))
+    let a:db.schemas.items[schema].functions.list = sort(get(functions_by_schema, schema, []))
     call self.populate_table_items(a:db.schemas.items[schema].tables)
+    call self.populate_procedure_items(a:db.schemas.items[schema].procedures)
+    call self.populate_function_items(a:db.schemas.items[schema].functions)
   endfor
   return a:db
 endfunction

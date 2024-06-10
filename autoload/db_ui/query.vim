@@ -33,21 +33,44 @@ function! s:query.open(item, edit_action) abort
   let label = get(a:item, 'label', '')
   let table = ''
   let schema = ''
-  if a:item.type !=? 'query'
-    let suffix = a:item.table.'-'.a:item.label
-    let table = a:item.table
+  let vararg = 'table'
+  if a:item.type !=? 'query' &&  a:item.type !=? 'procedure' &&  a:item.type !=? 'function'
+	let suffix = a:item.table.'-'.a:item.label
+	let vararg = a:item.table
+	let schema = a:item.schema
+  endif
+  if a:item.type ==? 'procedure'
+    let suffix = a:item.procedure.'-'.a:item.label
+    let vararg = a:item.procedure
+    let schema = a:item.schema
+  endif
+  if a:item.type ==? 'function'
+    let suffix = a:item.function.'-'.a:item.label
+    let vararg = a:item.function
     let schema = a:item.schema
   endif
 
-  let buffer_name = self.generate_buffer_name(db, { 'schema': schema, 'table': table, 'label': label, 'filetype': db.filetype })
-  call self.open_buffer(db, buffer_name, a:edit_action, {'table': table, 'content': get(a:item, 'content'), 'schema': schema })
+  " let buffer_name = self.generate_buffer_name(db, { 'schema': schema, 'table': table, 'label': label, 'filetype': db.filetype })
+  " call self.open_buffer(db, buffer_name, a:edit_action, {'table': table, 'content': get(a:item, 'content'), 'schema': schema })
+  let buffer_name = self.generate_buffer_name(db, { 'schema': schema, a:item.type: vararg, 'label': label, 'filetype': db.filetype })
+  call self.open_buffer(db, buffer_name, a:edit_action, {a:item.type: vararg, 'content': get(a:item, 'content'), 'schema': schema })
 endfunction
 
 function! s:query.generate_buffer_name(db, opts) abort
   let time = exists('*strftime') ? strftime('%Y-%m-%d-%H-%M-%S') : localtime()
   let suffix = 'query'
-  if !empty(a:opts.table)
+  let table = get(a:opts, 'table', '')
+  let procedure = get(a:opts, 'procedure', '')
+  let function = get(a:opts, 'function', '')
+  " if !empty(a:opts.table)
+  if !empty(table)
     let suffix = printf('%s-%s', a:opts.table, a:opts.label)
+  endif
+  if !empty(procedure)
+    let suffix = printf('%s-%s', a:opts.procedure, a:opts.label)
+  endif
+  if !empty(function)
+    let suffix = printf('%s-%s', a:opts.function, a:opts.label)
   endif
 
   let buffer_name = db_ui#utils#slug(printf('%s-%s', a:db.name, suffix))
@@ -101,6 +124,8 @@ endfunction
 function s:query.open_buffer(db, buffer_name, edit_action, ...)
   let opts = get(a:, '1', {})
   let table = get(opts, 'table', '')
+  let procedure = get(opts, 'procedure', '')
+  let function = get(opts, 'function', '')
   let schema = get(opts, 'schema', '')
   let default_content = get(opts, 'content', g:db_ui_default_query)
   let was_single_win = winnr('$') ==? 1
@@ -118,7 +143,8 @@ function s:query.open_buffer(db, buffer_name, edit_action, ...)
   silent! exe a:edit_action.' '.a:buffer_name
   call self.setup_buffer(a:db, opts, a:buffer_name, was_single_win)
 
-  if empty(table)
+  " if empty(table)
+  if empty(table) && empty(procedure) && empty(function)
     return
   endif
 
@@ -131,7 +157,15 @@ function s:query.open_buffer(db, buffer_name, edit_action, ...)
     let optional_schema = optional_schema.'.'
   endif
 
-  let content = substitute(default_content, '{table}', table, 'g')
+  if !empty(table)
+	  let content = substitute(default_content, '{table}', table, 'g')
+  endif
+  if !empty(procedure)
+	  let content = substitute(default_content, '{procedure}', procedure, 'g')
+  endif
+  if !empty(function)
+	  let content = substitute(default_content, '{function}', function, 'g')
+  endif
   let content = substitute(content, '{optional_schema}', optional_schema, 'g')
   let content = substitute(content, '{schema}', schema, 'g')
   let db_name = !empty(schema) ? schema : a:db.db_name

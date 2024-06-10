@@ -93,6 +93,8 @@ function! db_ui#get_conn_info(db_key_name) abort
         \ 'url': db.url,
         \ 'conn': db.conn,
         \ 'tables': db.tables.list,
+        \ 'procedures': db.procedures.list,
+        \ 'functions': db.functions.list,
         \ 'schemas': db.schemas.list,
         \ 'scheme': db.scheme,
         \ 'connected': !empty(db.conn),
@@ -247,8 +249,12 @@ function! s:dbui.generate_new_db_entry(db) abort
         \ 'source': a:db.source,
         \ 'scheme': '',
         \ 'table_helpers': {},
+        \ 'procedure_helpers': {},
+        \ 'function_helpers': {},
         \ 'expanded': 0,
         \ 'tables': {'expanded': 0 , 'items': {}, 'list': [] },
+        \ 'procedures': {'expanded': 0 , 'items': {}, 'list': [] },
+        \ 'functions': {'expanded': 0 , 'items': {}, 'list': [] },
         \ 'schemas': {'expanded': 0, 'items': {}, 'list': [] },
         \ 'saved_queries': { 'expanded': 0, 'list': [] },
         \ 'buffers': { 'expanded': 0, 'list': buffers, 'tmp': [] },
@@ -410,6 +416,8 @@ function! s:dbui.populate_schema_info(db) abort
 
   let a:db.scheme = scheme
   let a:db.table_helpers = db_ui#table_helpers#get(scheme)
+  let a:db.procedure_helpers = db_ui#procedure_helpers#get(scheme)
+  let a:db.function_helpers = db_ui#function_helpers#get(scheme)
   let a:db.schema_support = schema_support
   let a:db.quote = get(scheme_info, 'quote', 0)
   let a:db.default_scheme = get(scheme_info, 'default_scheme', '')
